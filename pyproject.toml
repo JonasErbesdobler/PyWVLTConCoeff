@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "GeoComp"
+version = "0.1.0"
+dependencies = [
+  "numpy>=2.0.0",
+  "matplotlib>=3.8.0"
+]
+requires-python = ">=3.9"
+authors = [
+  {name = "Jonas A. Erbesdobler", email = "erbesdobler@g.ecc.u-tokyo.ac.jp"}
+]
+maintainers = [
+  {name = "Jonas A. Erbesdobler", email = "erbesdobler@g.ecc.u-tokyo.ac.jp"}
+]
+description = "A Python package for comparing geometric shapes at angled projections"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+keywords = ["geometry", "projection"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+
+  # Specify the Python versions you support here.
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.optional-dependencies]
+gui = [
+    "PyQt6",
+    "pre-commit"
+]
+
+[project.urls]
+# Homepage = """
+# Documentation = ""
+Repository = "https://github.com/JonasErbesdobler/GeoComp"
+# "Bug Tracker" = ""
+# Changelog = ""
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.ruff]
+# You can add other rules here if you want
+
+[tool.ruff.per-file-ignores]
+"geocomp/__init__.py" = ["F403"]
