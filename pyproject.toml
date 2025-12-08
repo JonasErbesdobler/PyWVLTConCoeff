@@ -3,7 +3,7 @@ requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "GeoComp"
+name = "PyWVLTConCoeff"
 version = "0.1.0"
 dependencies = [
   "numpy>=2.0.0",
@@ -16,11 +16,11 @@ authors = [
 maintainers = [
   {name = "Jonas A. Erbesdobler", email = "erbesdobler@g.ecc.u-tokyo.ac.jp"}
 ]
-description = "A Python package for comparing geometric shapes at angled projections"
+description = "A Python package for calculating up to four-term wavelet connection coefficients."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICEN[CS]E.*"]
-keywords = ["geometry", "projection"]
+keywords = ["wavelets", "connection coefficients", "numerical methods", "python"]
 classifiers = [
   "Development Status :: 3 - Alpha",
 
@@ -42,7 +42,7 @@ gui = [
 [project.urls]
 # Homepage = """
 # Documentation = ""
-Repository = "https://github.com/JonasErbesdobler/GeoComp"
+Repository = "https://github.com/JonasErbesdobler/PyWVLTConCoeff"
 # "Bug Tracker" = ""
 # Changelog = ""
 
@@ -53,4 +53,4 @@ where = ["."]
 # You can add other rules here if you want
 
 [tool.ruff.per-file-ignores]
-"geocomp/__init__.py" = ["F403"]
+"wvltcc/__init__.py" = ["F403"]

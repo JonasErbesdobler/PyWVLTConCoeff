@@ -1,5 +1,5 @@
-# GeoComp
-A Python package for comparing geometric shapes at angled projections
+# PyWVLTConCoeff
+A Python package for calculating up to four-term wavelet connection coefficients.
 
 ## Installation
 
