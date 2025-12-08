@@ -1,0 +1,19 @@
+# local environment files
+*venv/
+__pycache__/
+.ipynb_checkpoints/
+.ruff_cache/
+
+# IDE files
+.vscode/
+.idea/
+
+# local data
+figures/
+data/
+*.npy
+*.csv
+*.h5
+*.png
+*.jpg
+*.pdf
