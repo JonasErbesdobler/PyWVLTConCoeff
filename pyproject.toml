@@ -47,7 +47,10 @@ Repository = "https://github.com/JonasErbesdobler/PyWVLTConCoeff"
 # Changelog = ""
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.ruff]
 # You can add other rules here if you want
