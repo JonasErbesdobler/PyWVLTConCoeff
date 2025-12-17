@@ -4,8 +4,23 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-from .coeffs import two_term_coeff_solver
+from .coeffs import (
+    two_term_coeff_solver,
+    three_term_coeff_solver,
+    four_term_coeff_solver,
+)
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib import rcParams
+
+
+def _axes_offset(ax: plt.Axes, font_size: float, em: float = 0.8) -> float:
+    """Return axes coordinate offset for moving a spine by a font-scaled padding."""
+    fig = ax.figure
+    axes_height = fig.get_figheight() * ax.get_position().height
+    if axes_height == 0:
+        return 0.0
+    padding_inches = (font_size / 72.0) * em
+    return -padding_inches / axes_height
 
 
 def create_custom_colormap():
@@ -151,7 +166,7 @@ def plot_two_term_residuals(
     path: str,
     format: str = "pdf",
     fig_dpi: int = 100,
-    fig_size: tuple = (6, 5),
+    font_size: int = 14,
 ):
     """Plots the residuals of the two-term connection coefficient calculations.
 
@@ -165,6 +180,9 @@ def plot_two_term_residuals(
         The directory path where the plot will be saved.
     """
 
+    # set font size for plots
+    rcParams.update({"font.size": font_size})
+
     # initialize lists to hold residuals
     res_ref = []
     res_mom = []
@@ -175,15 +193,37 @@ def plot_two_term_residuals(
         res_ref.append(ref_res)
         res_mom.append(mom_res)
 
+    # define constant offsets and sizes
+    plot_vert = 3.0
+    plot_horz = 2.0
+    bottom_pad = 0.7 * (font_size / 14)
+    top_pad = 0.2
+    left_pad = 1.1 * (font_size / 14)
+    right_pad = 0.2
+
+    # calculate figure size
+    fig_height = plot_vert + bottom_pad + top_pad
+    fig_width = plot_horz + left_pad + right_pad
+
     # plot refinement residuals
-    fig, ax = plt.subplots(1, 1, figsize=fig_size)
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
     for i in range(len(deriv_orders)):
         ax.bar(i, res_ref[i], label=rf"$i = {i}$", color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_xticks(range(len(deriv_orders)))
+    ax.set_xticklabels([str(i) for i in deriv_orders])
     ax.set_yscale("log")
     ax.set_xlabel(r"$i$")
     ax.set_ylabel(r"$|| H \cdot \Gamma^{(i)} - \frac{1}{2^i} \Gamma^{(i)} ||_{L_2}$")
-    ax.grid()
-    fig.tight_layout()
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"two_term_{wvlt}_refinement_residuals.{format}"),
         dpi=fig_dpi,
@@ -191,16 +231,609 @@ def plot_two_term_residuals(
     plt.close(fig)
 
     # plot moment residuals
-    fig, ax = plt.subplots(1, 1, figsize=fig_size)
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
     for i in range(len(deriv_orders)):
         ax.bar(i, res_mom[i], label=rf"$i = {i}$", color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_xticks(range(len(deriv_orders)))
+    ax.set_xticklabels([str(i) for i in deriv_orders])
     ax.set_yscale("log")
     ax.set_xlabel(r"$i$")
-    ax.set_ylabel(r"$|| k^{\circ i} \cdot \Gamma^{(i)} - i!(-1)^i ||_{L_2}$")
-    ax.grid()
-    fig.tight_layout()
+    ax.set_ylabel(r"$|| k^{\circ i} \cdot \Gamma^{(i)} - i! ||_{L_2}$")
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"two_term_{wvlt}_momentum_residuals.{format}"),
         dpi=fig_dpi,
     )
     plt.close(fig)
+
+    pass
+
+
+def plot_three_term_residuals(
+    wvlt: str,
+    deriv_orders: np.ndarray,
+    path: str,
+    format: str = "pdf",
+    fig_dpi: int = 100,
+    font_size: int = 14,
+):
+    """Plots the residuals of the three-term connection coefficient calculations.
+
+    Parameters
+    ----------
+    wvlt : str
+        Name of the wavelet (must be recognized by PyWavelets).
+    deriv_orders : np.ndarray
+        (2xN) or (Nx2) array of derivative orders to plot.
+    path : str
+        The directory path where the plot will be saved.
+    """
+
+    # ensure deriv_orders is of shape (Nx2)
+    shp = deriv_orders.shape
+    if shp[0] != 2 and shp[1] != 2:
+        raise ValueError("deriv_orders must be of shape (2xN) or (Nx2)")
+    if shp[0] == 2:
+        deriv_orders = deriv_orders.T
+
+    # sort derivative orders by first column
+    deriv_orders = deriv_orders[np.lexsort((deriv_orders[:, 1], deriv_orders[:, 0]))]
+
+    # set font size for plots
+    rcParams.update({"font.size": font_size})
+
+    # initialize lists to hold residuals
+    res_ref = []
+    res_mom = []
+
+    # compute residuals for each derivative order
+    for i in range(deriv_orders.shape[0]):
+        _, ref_res, mom_res = three_term_coeff_solver(
+            wvlt, deriv_orders[i, :], residuals=True
+        )
+        res_ref.append(ref_res)
+        res_mom.append(mom_res)
+
+    # define constant offsets and sizes
+    plot_vert = 3.0
+    plot_horz = 7.0
+    bottom_pad = 1.4 * (font_size / 14)
+    top_pad = 0.2
+    left_pad = 1.1 * (font_size / 14)
+    right_pad = 0.2
+
+    # calculate figure size
+    fig_height = plot_vert + bottom_pad + top_pad
+    fig_width = plot_horz + left_pad + right_pad
+
+    # plot refinement residuals
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
+    for i in range(deriv_orders.shape[0]):
+        ax.bar(i, res_ref[i], color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_yscale("log")
+    ax.set_xlabel(r"$i_1$")
+    ax.set_ylabel(
+        r"$|| H \cdot \Omega^{(i_1),(i_2)} - \frac{1}{2^{i_1 + i_2 + 0.5}} \Omega^{(i_1),(i_2)} ||_{L_2}$",
+        loc="top",
+    )
+    ax.set_xticks(np.arange(deriv_orders.shape[0]))
+    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.xaxis.set_ticks_position("bottom")
+    ax2.xaxis.set_label_position("bottom")
+    ax2.spines["bottom"].set_position(("axes", -0.25))
+    ax2.set_xlabel(r"$i_2$")
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
+    fig.savefig(
+        os.path.join(path, f"three_term_{wvlt}_refinement_residuals.{format}"),
+        dpi=fig_dpi,
+    )
+    plt.close(fig)
+
+    # plot moment residuals
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
+    for i in range(deriv_orders.shape[0]):
+        ax.bar(i, res_mom[i], color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_yscale("log")
+    ax.set_xlabel(r"$i_1$")
+    ax.set_ylabel(
+        r"$|| k^{\circ i} \cdot \Omega^{(i_1),(i_2)} - i! ||_{L_2}$", loc="center"
+    )
+    ax.set_xticks(range(deriv_orders.shape[0]))
+    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.xaxis.set_ticks_position("bottom")
+    ax2.xaxis.set_label_position("bottom")
+    ax2.spines["bottom"].set_position(("axes", -0.25))
+    ax2.set_xlabel(r"$i_2$")
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
+    fig.savefig(
+        os.path.join(path, f"three_term_{wvlt}_momentum_residuals.{format}"),
+        dpi=fig_dpi,
+    )
+    plt.close(fig)
+
+    pass
+
+
+def plot_four_term_residuals(
+    wvlt: str,
+    deriv_orders: np.ndarray,
+    path: str,
+    format: str = "pdf",
+    fig_dpi: int = 100,
+    fig_size: tuple = (16, 5),
+    font_size: int = 14,
+):
+    """Plots the residuals of the three-term connection coefficient calculations.
+
+    Parameters
+    ----------
+    wvlt : str
+        Name of the wavelet (must be recognized by PyWavelets).
+    deriv_orders : np.ndarray
+        (3xN) or (Nx3) array of derivative orders to plot.
+    path : str
+        The directory path where the plot will be saved.
+    """
+
+    # ensure deriv_orders is of shape (Nx3)
+    shp = deriv_orders.shape
+    if shp[0] != 3 and shp[1] != 3:
+        raise ValueError("deriv_orders must be of shape (3xN) or (Nx3)")
+    if shp[0] == 3:
+        deriv_orders = deriv_orders.T
+
+    # sort derivative orders by first column
+    deriv_orders = deriv_orders[
+        np.lexsort((deriv_orders[:, 2], deriv_orders[:, 1], deriv_orders[:, 0]))
+    ]
+
+    # set font size for plots
+    rcParams.update({"font.size": font_size})
+
+    # initialize lists to hold residuals
+    res_ref = []
+    res_mom = []
+
+    # compute residuals for each derivative order
+    for i in range(deriv_orders.shape[0]):
+        _, ref_res, mom_res = four_term_coeff_solver(
+            wvlt, deriv_orders[i, :], residuals=True
+        )
+        res_ref.append(ref_res)
+        res_mom.append(mom_res)
+
+    # define constant offsets and sizes
+    plot_vert = 3.0
+    plot_horz = 15.0
+    bottom_pad = 2.1 * (font_size / 14)
+    top_pad = 0.2
+    left_pad = 1.1 * (font_size / 14)
+    right_pad = 0.2
+
+    # calculate figure size
+    fig_height = plot_vert + bottom_pad + top_pad
+    fig_width = plot_horz + left_pad + right_pad
+
+    # plot refinement residuals
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
+    for i in range(deriv_orders.shape[0]):
+        ax.bar(i, res_ref[i], color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_yscale("log")
+    ax.set_xlabel(r"$i_1$")
+    ax.set_ylabel(
+        r"$|| H \cdot \Lambda^{(i_1),(i_2),(i_3)} - \frac{1}{2^{i_1 + i_2 + i_3 + 1}} \Lambda^{(i_1),(i_2),(i_3)} ||_{L_2}$",
+        loc="top",
+    )
+    ax.set_xticks(np.arange(deriv_orders.shape[0]))
+    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.xaxis.set_ticks_position("bottom")
+    ax2.xaxis.set_label_position("bottom")
+    ax2.spines["bottom"].set_position(("axes", -0.25))
+    ax2.set_xlabel(r"$i_2$")
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+    ax3 = ax.twiny()
+    ax3.set_xlim(ax.get_xlim())
+    ax3.xaxis.set_ticks_position("bottom")
+    ax3.xaxis.set_label_position("bottom")
+    ax3.spines["bottom"].set_position(("axes", -0.5))
+    ax3.set_xlabel(r"$i_3$")
+    ax3.set_xticks(ax.get_xticks())
+    ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
+    fig.savefig(
+        os.path.join(path, f"four_term_{wvlt}_refinement_residuals.{format}"),
+        dpi=fig_dpi,
+    )
+    plt.close(fig)
+
+    # plot moment residuals
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = fig.add_axes(
+        [
+            left_pad / fig_width,
+            bottom_pad / fig_height,
+            plot_horz / fig_width,
+            plot_vert / fig_height,
+        ]
+    )
+    for i in range(deriv_orders.shape[0]):
+        ax.bar(i, res_mom[i], color="#2b8057")
+    ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+    ax.set_yscale("log")
+    ax.set_xlabel(r"$i_1$")
+    ax.set_ylabel(
+        r"$|| k^{\circ i} \cdot \Lambda^{(i_1),(i_2),(i_3)} - i! ||_{L_2}$",
+        loc="center",
+    )
+    ax.set_xticks(range(deriv_orders.shape[0]))
+    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.xaxis.set_ticks_position("bottom")
+    ax2.xaxis.set_label_position("bottom")
+    ax2.spines["bottom"].set_position(("axes", -0.25))
+    ax2.set_xlabel(r"$i_2$")
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+    ax3 = ax.twiny()
+    ax3.set_xlim(ax.get_xlim())
+    ax3.xaxis.set_ticks_position("bottom")
+    ax3.xaxis.set_label_position("bottom")
+    ax3.spines["bottom"].set_position(("axes", -0.5))
+    ax3.set_xlabel(r"$i_3$")
+    ax3.set_xticks(ax.get_xticks())
+    ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+    ax.grid(visible=True, which="both", axis="y", linestyle="-")
+    fig.savefig(
+        os.path.join(path, f"four_term_{wvlt}_momentum_residuals.{format}"),
+        dpi=fig_dpi,
+    )
+    plt.close(fig)
+
+    pass
+
+
+# def plot_two_term_residuals(
+#     wvlt: str,
+#     deriv_orders: np.ndarray,
+#     path: str,
+#     format: str = "pdf",
+#     fig_dpi: int = 100,
+#     fig_size: tuple = (4, 3),
+#     font_size: int = 14,
+# ):
+#     """Plots the residuals of the two-term connection coefficient calculations.
+
+#     Parameters
+#     ----------
+#     wvlt : str
+#         Name of the wavelet (must be recognized by PyWavelets).
+#     deriv_orders : np.ndarray
+#         Array of derivative orders to plot.
+#     path : str
+#         The directory path where the plot will be saved.
+#     """
+
+#     # set font size for plots
+#     rcParams.update({"font.size": font_size})
+
+#     # initialize lists to hold residuals
+#     res_ref = []
+#     res_mom = []
+
+#     # compute residuals for each derivative order
+#     for order in deriv_orders:
+#         _, ref_res, mom_res = two_term_coeff_solver(wvlt, order, residuals=True)
+#         res_ref.append(ref_res)
+#         res_mom.append(mom_res)
+
+#     # plot refinement residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(len(deriv_orders)):
+#         ax.bar(i, res_ref[i], label=rf"$i = {i}$", color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_xticks(range(len(deriv_orders)))
+#     ax.set_xticklabels([str(i) for i in deriv_orders])
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i$")
+#     ax.set_ylabel(r"$|| H \cdot \Gamma^{(i)} - \frac{1}{2^i} \Gamma^{(i)} ||_{L_2}$")
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"two_term_{wvlt}_refinement_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     # plot moment residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(len(deriv_orders)):
+#         ax.bar(i, res_mom[i], label=rf"$i = {i}$", color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_xticks(range(len(deriv_orders)))
+#     ax.set_xticklabels([str(i) for i in deriv_orders])
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i$")
+#     ax.set_ylabel(r"$|| k^{\circ i} \cdot \Gamma^{(i)} - i! ||_{L_2}$")
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"two_term_{wvlt}_momentum_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     pass
+
+
+# def plot_three_term_residuals(
+#     wvlt: str,
+#     deriv_orders: np.ndarray,
+#     path: str,
+#     format: str = "pdf",
+#     fig_dpi: int = 100,
+#     fig_size: tuple = (8, 4),
+#     font_size: int = 14,
+# ):
+#     """Plots the residuals of the three-term connection coefficient calculations.
+
+#     Parameters
+#     ----------
+#     wvlt : str
+#         Name of the wavelet (must be recognized by PyWavelets).
+#     deriv_orders : np.ndarray
+#         (2xN) or (Nx2) array of derivative orders to plot.
+#     path : str
+#         The directory path where the plot will be saved.
+#     """
+
+#     # ensure deriv_orders is of shape (Nx2)
+#     shp = deriv_orders.shape
+#     if shp[0] != 2 and shp[1] != 2:
+#         raise ValueError("deriv_orders must be of shape (2xN) or (Nx2)")
+#     if shp[0] == 2:
+#         deriv_orders = deriv_orders.T
+
+#     # sort derivative orders by first column
+#     deriv_orders = deriv_orders[np.lexsort((deriv_orders[:, 1], deriv_orders[:, 0]))]
+
+#     # set font size for plots
+#     rcParams.update({"font.size": font_size})
+
+#     # initialize lists to hold residuals
+#     res_ref = []
+#     res_mom = []
+
+#     # compute residuals for each derivative order
+#     for i in range(deriv_orders.shape[0]):
+#         _, ref_res, mom_res = three_term_coeff_solver(
+#             wvlt, deriv_orders[i, :], residuals=True
+#         )
+#         res_ref.append(ref_res)
+#         res_mom.append(mom_res)
+
+#     # plot refinement residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(deriv_orders.shape[0]):
+#         ax.bar(i, res_ref[i], color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i_1$")
+#     ax.set_ylabel(
+#         r"$|| H \cdot \Omega^{(i_1),(i_2)} - \frac{1}{2^{i_1 + i_2 + 0.5}} \Omega^{(i_1),(i_2)} ||_{L_2}$",
+#         loc="top",
+#     )
+#     ax.set_xticks(np.arange(deriv_orders.shape[0]))
+#     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+#     ax2 = ax.twiny()
+#     ax2.set_xlim(ax.get_xlim())
+#     ax2.xaxis.set_ticks_position("bottom")
+#     ax2.xaxis.set_label_position("bottom")
+#     ax2.spines["bottom"].set_position(("axes", -0.33))
+#     ax2.set_xlabel(r"$i_2$")
+#     ax2.set_xticks(ax.get_xticks())
+#     ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"three_term_{wvlt}_refinement_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     # plot moment residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(deriv_orders.shape[0]):
+#         ax.bar(i, res_mom[i], color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i_1$")
+#     ax.set_ylabel(r"$|| k^{\circ i} \cdot \Omega^{(i_1),(i_2)} - i! ||_{L_2}$", loc="center")
+#     ax.set_xticks(range(deriv_orders.shape[0]))
+#     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+#     ax2 = ax.twiny()
+#     ax2.set_xlim(ax.get_xlim())
+#     ax2.xaxis.set_ticks_position("bottom")
+#     ax2.xaxis.set_label_position("bottom")
+#     ax2.spines["bottom"].set_position(("axes", -0.3))
+#     ax2.set_xlabel(r"$i_2$")
+#     ax2.set_xticks(ax.get_xticks())
+#     ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"three_term_{wvlt}_momentum_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     pass
+
+
+# def plot_four_term_residuals(
+#     wvlt: str,
+#     deriv_orders: np.ndarray,
+#     path: str,
+#     format: str = "pdf",
+#     fig_dpi: int = 100,
+#     fig_size: tuple = (16, 5),
+#     font_size: int = 14,
+# ):
+#     """Plots the residuals of the three-term connection coefficient calculations.
+
+#     Parameters
+#     ----------
+#     wvlt : str
+#         Name of the wavelet (must be recognized by PyWavelets).
+#     deriv_orders : np.ndarray
+#         (3xN) or (Nx3) array of derivative orders to plot.
+#     path : str
+#         The directory path where the plot will be saved.
+#     """
+
+#     # ensure deriv_orders is of shape (Nx3)
+#     shp = deriv_orders.shape
+#     if shp[0] != 3 and shp[1] != 3:
+#         raise ValueError("deriv_orders must be of shape (3xN) or (Nx3)")
+#     if shp[0] == 3:
+#         deriv_orders = deriv_orders.T
+
+#     # sort derivative orders by first column
+#     deriv_orders = deriv_orders[
+#         np.lexsort((deriv_orders[:, 2], deriv_orders[:, 1], deriv_orders[:, 0]))
+#     ]
+
+#     # set font size for plots
+#     rcParams.update({"font.size": font_size})
+
+#     # initialize lists to hold residuals
+#     res_ref = []
+#     res_mom = []
+
+#     # compute residuals for each derivative order
+#     for i in range(deriv_orders.shape[0]):
+#         _, ref_res, mom_res = four_term_coeff_solver(
+#             wvlt, deriv_orders[i, :], residuals=True
+#         )
+#         res_ref.append(ref_res)
+#         res_mom.append(mom_res)
+
+#     # plot refinement residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(deriv_orders.shape[0]):
+#         ax.bar(i, res_ref[i], color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i_1$")
+#     ax.set_ylabel(
+#         r"$|| H \cdot \Lambda^{(i_1),(i_2),(i_3)} - \frac{1}{2^{i_1 + i_2 + i_3 + 1}} \Lambda^{(i_1),(i_2),(i_3)} ||_{L_2}$",
+#         loc="top"
+#     )
+#     ax.set_xticks(np.arange(deriv_orders.shape[0]))
+#     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+#     ax2 = ax.twiny()
+#     ax2.set_xlim(ax.get_xlim())
+#     ax2.xaxis.set_ticks_position("bottom")
+#     ax2.xaxis.set_label_position("bottom")
+#     ax2.spines["bottom"].set_position(("axes", -0.22))
+#     ax2.set_xlabel(r"$i_2$")
+#     ax2.set_xticks(ax.get_xticks())
+#     ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+#     ax3 = ax.twiny()
+#     ax3.set_xlim(ax.get_xlim())
+#     ax3.xaxis.set_ticks_position("bottom")
+#     ax3.xaxis.set_label_position("bottom")
+#     ax3.spines["bottom"].set_position(("axes", -0.44))
+#     ax3.set_xlabel(r"$i_3$")
+#     ax3.set_xticks(ax.get_xticks())
+#     ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"four_term_{wvlt}_refinement_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     # plot moment residuals
+#     fig, ax = plt.subplots(1, 1, figsize=fig_size, constrained_layout=True)
+#     fig.get_layout_engine().set(h_pad=25 / 72.)
+#     for i in range(deriv_orders.shape[0]):
+#         ax.bar(i, res_mom[i], color="#2b8057")
+#     ax.set_xlim(-0.6, deriv_orders.shape[0] - 0.4)
+#     ax.set_yscale("log")
+#     ax.set_xlabel(r"$i_1$")
+#     ax.set_ylabel(r"$|| k^{\circ i} \cdot \Lambda^{(i_1),(i_2),(i_3)} - i! ||_{L_2}$", loc="center")
+#     ax.set_xticks(range(deriv_orders.shape[0]))
+#     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
+#     ax2 = ax.twiny()
+#     ax2.set_xlim(ax.get_xlim())
+#     ax2.xaxis.set_ticks_position("bottom")
+#     ax2.xaxis.set_label_position("bottom")
+#     ax2.spines["bottom"].set_position(("axes", -0.22))
+#     ax2.set_xlabel(r"$i_2$")
+#     ax2.set_xticks(ax.get_xticks())
+#     ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
+#     ax3 = ax.twiny()
+#     ax3.set_xlim(ax.get_xlim())
+#     ax3.xaxis.set_ticks_position("bottom")
+#     ax3.xaxis.set_label_position("bottom")
+#     ax3.spines["bottom"].set_position(("axes", -0.44))
+#     ax3.set_xlabel(r"$i_3$")
+#     ax3.set_xticks(ax.get_xticks())
+#     ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+#     ax.grid(visible=True, which="both", axis="y", linestyle="-")
+#     fig.savefig(
+#         os.path.join(path, f"four_term_{wvlt}_momentum_residuals.{format}"),
+#         dpi=fig_dpi,
+#     )
+#     plt.close(fig)
+
+#     pass

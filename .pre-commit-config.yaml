@@ -4,7 +4,7 @@ exclude: |
   (?x)^(
       venv*/|
       data*/|
-      src/optimize.py|
+      figures*/|
   )$
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
