@@ -9,8 +9,10 @@ def two_term_coeff_solver_low_mem(
     wvlt: str, deriv_order: int, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet. This is
-    a low-memory implementation, i.e., it avoids constructing large intermediate matrices.
-    This comes at the cost of computational speed.
+    a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
+    and runs single-core. This comes at the cost of computational speed.
+
+    TODO: Change to sparse matrices to further reduce memory usage.
 
     Parameters
     ----------
@@ -95,8 +97,10 @@ def three_term_coeff_solver_low_mem(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet. This is
-    a low-memory implementation, i.e., it avoids constructing large intermediate matrices.
-    This comes at the cost of computational speed.
+    a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
+    and runs single-core. This comes at the cost of computational speed.
+
+    TODO: Change to sparse matrices to further reduce memory usage.
 
     Parameters
     ----------
@@ -213,8 +217,10 @@ def four_term_coeff_solver_low_mem(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet. This is
-    a low-memory implementation, i.e., it avoids constructing large intermediate matrices.
-    This comes at the cost of computational speed.
+    a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
+    and runs single-core. This comes at the cost of computational speed.
+
+    TODO: Change to sparse matrices to further reduce memory usage.
 
     Parameters
     ----------
@@ -365,6 +371,9 @@ def two_term_coeff_solver(
     wvlt: str, deriv_order: int, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet.
+    Calculations and H matrix construction is vectorized making use of NumPy's
+    intrinsic optimizations via broadcasting.
+
     Parameters
     ----------
     wvlt : str
@@ -470,6 +479,8 @@ def three_term_coeff_solver(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet.
+    Calculations and H matrix construction is vectorized making use of NumPy's
+    intrinsic optimizations via broadcasting.
 
     Parameters
     ----------
@@ -603,6 +614,8 @@ def four_term_coeff_solver(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
 ) -> np.ndarray:
     """Solves for the two-term connection coefficients of a given wavelet.
+    Calculations and H matrix construction is vectorized making use of NumPy's
+    intrinsic optimizations via broadcasting.
 
     Parameters
     ----------
