@@ -1,4 +1,4 @@
-matplotlib
-numpy
+matplotlib>=3.8.0
+numpy>=2.0.0
 pre-commit
-pywavelets
+pywavelets>=1.4.1
