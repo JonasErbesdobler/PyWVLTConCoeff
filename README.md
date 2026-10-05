@@ -27,3 +27,9 @@ Then, before committing to the repository, run
 pre-commit run -a
 ```
 every time to ensure correct formatting.
+
+## Testing
+The tests are run with `pytest` from the repository root:
+```bash
+pytest
+```

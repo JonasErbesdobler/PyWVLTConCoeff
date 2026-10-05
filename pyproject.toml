@@ -39,6 +39,9 @@ gui = [
     "PyQt6",
     "pre-commit"
 ]
+test = [
+    "pytest"
+]
 
 [project.urls]
 # Homepage = """
@@ -52,6 +55,9 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 # You can add other rules here if you want

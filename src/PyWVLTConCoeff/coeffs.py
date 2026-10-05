@@ -3,11 +3,94 @@
 import numpy as np
 import pywt
 import math
+import warnings
+
+from typing import Tuple, Union
+
+# relative tolerance on the least squares residual above which the system is
+# considered inconsistent, i.e., the requested coefficients are not well defined
+_RESIDUAL_TOL = 1e-8
+
+
+def _check_deriv_orders(deriv_orders, num_orders: int) -> np.ndarray:
+    """Validates the derivative orders and returns them as a 1D integer array.
+
+    Parameters
+    ----------
+    deriv_orders : array-like
+        Derivative orders (np.ndarray, list, or tuple of integers).
+    num_orders : int
+        Required number of derivative orders.
+
+    Returns
+    -------
+    np.ndarray
+        1D integer array of derivative orders.
+    """
+
+    deriv_orders = np.asarray(deriv_orders)
+
+    # check that deriv_orders has the required length
+    if deriv_orders.ndim != 1 or len(deriv_orders) != num_orders:
+        raise ValueError(f"deriv_orders must be a 1D array of length {num_orders}.")
+
+    # check that deriv_orders are integers
+    if not np.issubdtype(deriv_orders.dtype, np.integer):
+        raise ValueError("All entries in deriv_orders must be integers.")
+
+    # check that deriv_orders are non-negative
+    if np.any(deriv_orders < 0):
+        raise ValueError("All entries in deriv_orders must be non-negative.")
+
+    return deriv_orders
+
+
+def _solve_lstsq(lhs: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+    """Solves the overdetermined system via least squares (numpy uses SVD under
+    the hood) and warns if the solution is not unique or not consistent.
+
+    Parameters
+    ----------
+    lhs : np.ndarray
+        Stacked refinement and moment matrix.
+    rhs : np.ndarray
+        Stacked right-hand side.
+
+    Returns
+    -------
+    np.ndarray
+        Least squares solution.
+    """
+
+    coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+
+    # the least squares solution is only unique for full column rank
+    if rank < lhs.shape[1]:
+        warnings.warn(
+            f"Least squares system is rank deficient (rank {rank} of {lhs.shape[1]}). "
+            "The computed connection coefficients are not unique.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+    # a large residual means refinement and moment equations cannot be fulfilled
+    # simultaneously, e.g., if the scaling function is not regular enough
+    res_norm = np.linalg.norm(np.dot(lhs, coeff) - rhs)
+    if res_norm > _RESIDUAL_TOL * max(1.0, np.linalg.norm(coeff)):
+        warnings.warn(
+            f"Least squares residual is large ({res_norm:.1e}). The connection "
+            "coefficients are likely not well defined for this wavelet and "
+            "derivative order.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+    return coeff
 
 
 def two_term_coeff_solver_low_mem(
     wvlt: str, deriv_order: int, residuals: bool = False
-) -> np.ndarray:
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
     """Solves for the two-term connection coefficients of a given wavelet. This is
     a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
     and runs single-core. This comes at the cost of computational speed.
@@ -35,11 +118,15 @@ def two_term_coeff_solver_low_mem(
     if not np.issubdtype(type(deriv_order), np.integer):
         raise ValueError("deriv_order must be an integer.")
 
+    # check that deriv_order is non-negative
+    if deriv_order < 0:
+        raise ValueError("deriv_order must be non-negative.")
+
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass filter
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -77,7 +164,7 @@ def two_term_coeff_solver_low_mem(
     rhs = np.concatenate((two_term_ref_rhs, two_term_mom_rhs))
 
     # solve least squares approximation (numpy uses SVD under the hood)
-    two_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    two_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -95,8 +182,8 @@ def two_term_coeff_solver_low_mem(
 
 def three_term_coeff_solver_low_mem(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
-) -> np.ndarray:
-    """Solves for the two-term connection coefficients of a given wavelet. This is
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
+    """Solves for the three-term connection coefficients of a given wavelet. This is
     a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
     and runs single-core. This comes at the cost of computational speed.
 
@@ -107,31 +194,26 @@ def three_term_coeff_solver_low_mem(
     wvlt : str
         Name of the wavelet (must be recognized by PyWavelets).
     deriv_orders : np.ndarray
-        1D, len=2 int array of derivative orders for which to compute the coefficients.
+        1D, len=2 int array (or list/tuple) of derivative orders for which to compute the coefficients.
     residuals : bool, optional
         If True, also return the residuals of the refinement and moment equations.
 
     Returns
     -------
     np.ndarray
-        Array of two-term connection coefficients.
+        Flattened (row-major) array of three-term connection coefficients.
     tuple, optional
         If residuals is True, returns a tuple containing the coefficients and the residuals.
     """
 
-    # check that deriv_orders has length 2
-    if len(deriv_orders) != 2:
-        raise ValueError("deriv_orders must be a 1D array of length 2.")
-
-    # check that deriv_orders are integers
-    if not np.issubdtype(deriv_orders.dtype, np.integer):
-        raise ValueError("All entries in deriv_orders must be integers.")
+    # check that deriv_orders are 2 non-negative integers
+    deriv_orders = _check_deriv_orders(deriv_orders, 2)
 
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -197,7 +279,7 @@ def three_term_coeff_solver_low_mem(
     rhs = np.concatenate((three_term_ref_rhs, three_term_mom_rhs))
 
     # solve least squares approximation
-    three_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    three_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -215,8 +297,8 @@ def three_term_coeff_solver_low_mem(
 
 def four_term_coeff_solver_low_mem(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
-) -> np.ndarray:
-    """Solves for the two-term connection coefficients of a given wavelet. This is
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
+    """Solves for the four-term connection coefficients of a given wavelet. This is
     a low-memory implementation, i.e., it avoids constructing large intermediate matrices,
     and runs single-core. This comes at the cost of computational speed.
 
@@ -227,31 +309,26 @@ def four_term_coeff_solver_low_mem(
     wvlt : str
         Name of the wavelet (must be recognized by PyWavelets).
     deriv_orders : np.ndarray
-        1D, len=3 int array of derivative orders for which to compute the coefficients.
+        1D, len=3 int array (or list/tuple) of derivative orders for which to compute the coefficients.
     residuals : bool, optional
         If True, also return the residuals of the refinement and moment equations.
 
     Returns
     -------
     np.ndarray
-        Array of two-term connection coefficients.
+        Flattened (row-major) array of four-term connection coefficients.
     tuple, optional
         If residuals is True, returns a tuple containing the coefficients and the residuals.
     """
 
-    # check that deriv_orders has length 3
-    if len(deriv_orders) != 3:
-        raise ValueError("deriv_orders must be a 1D array of length 3.")
-
-    # check that deriv_orders are integers
-    if not np.issubdtype(deriv_orders.dtype, np.integer):
-        raise ValueError("All entries in deriv_orders must be integers.")
+    # check that deriv_orders are 3 non-negative integers
+    deriv_orders = _check_deriv_orders(deriv_orders, 3)
 
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -349,7 +426,7 @@ def four_term_coeff_solver_low_mem(
     rhs = np.concatenate((four_term_ref_rhs, four_term_mom_rhs))
 
     # solve least squares approximation
-    four_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    four_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -360,8 +437,6 @@ def four_term_coeff_solver_low_mem(
             np.dot(four_term_mom_mat, four_term_coeff) - four_term_mom_rhs
         )
 
-        four_term_coeff, ref_error, mom_error
-
         return four_term_coeff, ref_error, mom_error
 
     return four_term_coeff
@@ -369,7 +444,7 @@ def four_term_coeff_solver_low_mem(
 
 def two_term_coeff_solver(
     wvlt: str, deriv_order: int, residuals: bool = False
-) -> np.ndarray:
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
     """Solves for the two-term connection coefficients of a given wavelet.
     Calculations and H matrix construction is vectorized making use of NumPy's
     intrinsic optimizations via broadcasting.
@@ -395,11 +470,15 @@ def two_term_coeff_solver(
     if not np.issubdtype(type(deriv_order), np.integer):
         raise ValueError("deriv_order must be an integer.")
 
+    # check that deriv_order is non-negative
+    if deriv_order < 0:
+        raise ValueError("deriv_order must be non-negative.")
+
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass filter
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -459,7 +538,7 @@ def two_term_coeff_solver(
     rhs = np.concatenate((two_term_ref_rhs, two_term_mom_rhs))
 
     # solve least squares approximation (numpy uses SVD under the hood)
-    two_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    two_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -477,8 +556,8 @@ def two_term_coeff_solver(
 
 def three_term_coeff_solver(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
-) -> np.ndarray:
-    """Solves for the two-term connection coefficients of a given wavelet.
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
+    """Solves for the three-term connection coefficients of a given wavelet.
     Calculations and H matrix construction is vectorized making use of NumPy's
     intrinsic optimizations via broadcasting.
 
@@ -487,31 +566,26 @@ def three_term_coeff_solver(
     wvlt : str
         Name of the wavelet (must be recognized by PyWavelets).
     deriv_orders : np.ndarray
-        1D, len=2 int array of derivative orders for which to compute the coefficients.
+        1D, len=2 int array (or list/tuple) of derivative orders for which to compute the coefficients.
     residuals : bool, optional
         If True, also return the residuals of the refinement and moment equations.
 
     Returns
     -------
     np.ndarray
-        Array of two-term connection coefficients.
+        Flattened (row-major) array of three-term connection coefficients.
     tuple, optional
         If residuals is True, returns a tuple containing the coefficients and the residuals.
     """
 
-    # check that deriv_orders has length 2
-    if len(deriv_orders) != 2:
-        raise ValueError("deriv_orders must be a 1D array of length 2.")
-
-    # check that deriv_orders are integers
-    if not np.issubdtype(deriv_orders.dtype, np.integer):
-        raise ValueError("All entries in deriv_orders must be integers.")
+    # check that deriv_orders are 2 non-negative integers
+    deriv_orders = _check_deriv_orders(deriv_orders, 2)
 
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -594,7 +668,7 @@ def three_term_coeff_solver(
     rhs = np.concatenate((three_term_ref_rhs, three_term_mom_rhs))
 
     # solve least squares approximation
-    three_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    three_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -612,8 +686,8 @@ def three_term_coeff_solver(
 
 def four_term_coeff_solver(
     wvlt: str, deriv_orders: np.ndarray, residuals: bool = False
-) -> np.ndarray:
-    """Solves for the two-term connection coefficients of a given wavelet.
+) -> Union[np.ndarray, Tuple[np.ndarray, float, float]]:
+    """Solves for the four-term connection coefficients of a given wavelet.
     Calculations and H matrix construction is vectorized making use of NumPy's
     intrinsic optimizations via broadcasting.
 
@@ -622,31 +696,26 @@ def four_term_coeff_solver(
     wvlt : str
         Name of the wavelet (must be recognized by PyWavelets).
     deriv_orders : np.ndarray
-        1D, len=3 int array of derivative orders for which to compute the coefficients.
+        1D, len=3 int array (or list/tuple) of derivative orders for which to compute the coefficients.
     residuals : bool, optional
         If True, also return the residuals of the refinement and moment equations.
 
     Returns
     -------
     np.ndarray
-        Array of two-term connection coefficients.
+        Flattened (row-major) array of four-term connection coefficients.
     tuple, optional
         If residuals is True, returns a tuple containing the coefficients and the residuals.
     """
 
-    # check that deriv_orders has length 3
-    if len(deriv_orders) != 3:
-        raise ValueError("deriv_orders must be a 1D array of length 3.")
-
-    # check that deriv_orders are integers
-    if not np.issubdtype(deriv_orders.dtype, np.integer):
-        raise ValueError("All entries in deriv_orders must be integers.")
+    # check that deriv_orders are 3 non-negative integers
+    deriv_orders = _check_deriv_orders(deriv_orders, 3)
 
     # get filter bank of specified wavelet
     rec_lo = np.asarray(pywt.Wavelet(wvlt).filter_bank[2])
 
-    # remove zeros from the reconstruction low-pass
-    filt = rec_lo[rec_lo != 0]
+    # remove leading and trailing zeros from the reconstruction low-pass filter
+    filt = np.trim_zeros(rec_lo)
 
     # set constants
     filt_len = len(filt)
@@ -756,7 +825,7 @@ def four_term_coeff_solver(
     rhs = np.concatenate((four_term_ref_rhs, four_term_mom_rhs))
 
     # solve least squares approximation
-    four_term_coeff, res, rank, s = np.linalg.lstsq(lhs, rhs, rcond=None)
+    four_term_coeff = _solve_lstsq(lhs, rhs)
 
     if residuals:
         # check residuals for refinement and moment equations
@@ -766,8 +835,6 @@ def four_term_coeff_solver(
         mom_error = np.linalg.norm(
             np.dot(four_term_mom_mat, four_term_coeff) - four_term_mom_rhs
         )
-
-        four_term_coeff, ref_error, mom_error
 
         return four_term_coeff, ref_error, mom_error
 
