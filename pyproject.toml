@@ -20,8 +20,8 @@ maintainers = [
 description = "A Python package for calculating up to four-term wavelet connection coefficients on an infinite domain."
 readme = "README.md"
 license = "MIT"
-license-files = ["LICEN[CS]E.*"]
-keywords = ["wavelets", "connection coefficients", "numerical methods", "python"]
+license-files = ["LICEN[CS]E*"]
+keywords = ["wavelets", "daubechies", "connection coefficients", "wavelet-galerkin", "numerical methods", "python"]
 classifiers = [
   "Development Status :: 4 - Beta",
 
@@ -35,11 +35,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-gui = [
-    "PyQt6",
-    "pre-commit"
-]
-test = [
+dev = [
+    "pre-commit",
     "pytest"
 ]
 

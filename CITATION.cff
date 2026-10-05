@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PyWVLTConCoeff"
+abstract: "A Python package for calculating up to four-term wavelet connection coefficients on an infinite domain."
+type: software
+authors:
+  - family-names: "Erbesdobler"
+    given-names: "Jonas A."
+    affiliation: "Department of Aeronautics and Astronautics, The University of Tokyo"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/JonasErbesdobler/PyWVLTConCoeff"
+keywords:
+  - wavelets
+  - daubechies
+  - connection coefficients
+  - wavelet-galerkin
