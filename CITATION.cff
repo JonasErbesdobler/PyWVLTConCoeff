@@ -6,6 +6,7 @@ type: software
 authors:
   - family-names: "Erbesdobler"
     given-names: "Jonas A."
+    orcid: "https://orcid.org/0009-0007-8535-3401"
     affiliation: "Department of Aeronautics and Astronautics, The University of Tokyo"
 version: "0.1.0"
 license: MIT
