@@ -9,6 +9,8 @@ authors:
     orcid: "https://orcid.org/0009-0007-8535-3401"
     affiliation: "Department of Aeronautics and Astronautics, The University of Tokyo"
 version: "0.1.0"
+date-released: "2026-10-05"
+doi: "10.5281/zenodo.23161604"
 license: MIT
 repository-code: "https://github.com/JonasErbesdobler/PyWVLTConCoeff"
 keywords:

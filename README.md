@@ -1,4 +1,6 @@
 # PyWVLTConCoeff
+[![DOI](https://zenodo.org/badge/1112012796.svg)](https://zenodo.org/badge/latestdoi/1112012796)
+
 A Python package for calculating two-, three-, and four-term wavelet connection coefficients on an infinite domain.
 
 Connection coefficients are integrals of products of shifted scaling functions $\phi$ and their derivatives, e.g., the four-term coefficient
