@@ -3,7 +3,7 @@
 
 A Python package for calculating two-, three-, and four-term wavelet connection coefficients on an infinite domain.
 
-Connection coefficients are integrals of products of shifted scaling functions $\phi$ and their derivatives, e.g., the four-term coefficient
+Connection coefficients are defined as integrals of products of shifted scaling functions $\phi$ and their derivatives, e.g., the four-term coefficient
 
 $$
 \Lambda^{(i_1),(i_2),(i_3)}_{k_1,k_2,k_3} = \int \phi(t)\,\frac{\partial^{i_1} \phi(t-k_1)}{\partial t^{i_1}}\,\frac{\partial^{i_2} \phi(t-k_2)}{\partial t^{i_2}}\,\frac{\partial^{i_3} \phi(t-k_3)}{\partial t^{i_3}}\,dt .
@@ -45,21 +45,26 @@ gamma = two_term_coeff_solver(wvlt, 1)
 # three-term coefficients for derivative orders (i1, i2) = (0, 1)
 omega = three_term_coeff_solver(wvlt, [0, 1])
 
-# four-term coefficients for derivative orders (i1, i2, i3) = (0, 1, 2)
-lam = four_term_coeff_solver(wvlt, [0, 1, 2])
+# four-term coefficients for derivative orders (i1, i2, i3) = (0, 1, 1)
+lam = four_term_coeff_solver(wvlt, [0, 1, 1])
 ```
 The coefficients are returned as flattened arrays in row-major order. With $N$ being the filter length, each shift runs over $2N-3$ values from $-(N-2)$ to $N-2$, so a single coefficient is accessed as
 ```python
 N = 6
 lam = lam.reshape(2 * N - 3, 2 * N - 3, 2 * N - 3)
 k1, k2, k3 = 0, -1, 0
-value = lam[k1 + N - 2, k2 + N - 2, k3 + N - 2]  # 2.7328805311
+value = lam[k1 + N - 2, k2 + N - 2, k3 + N - 2]  # -1.9145852962
 ```
 Passing `residuals=True` additionally returns the $L_2$-norm errors in the refinement relations and the moment constraints:
 ```python
-lam, ref_error, mom_error = four_term_coeff_solver(wvlt, [0, 1, 2], residuals=True)
+lam, ref_error, mom_error = four_term_coeff_solver(wvlt, [0, 1, 1], residuals=True)
 ```
-A `RuntimeWarning` is raised if the linear system is rank deficient or cannot be fulfilled, which typically means that the requested derivative orders are not well defined for the chosen wavelet.
+A `RuntimeWarning` is raised if the linear system is rank deficient or cannot be fulfilled, in which case the returned values are not connection coefficients.
+
+### Valid derivative orders
+The integral above only exists if the scaling function is smooth enough. For a scaling function with $m$ continuous derivatives and a wavelet with $M$ vanishing moments, this is guaranteed for all derivative orders up to $\min(m, M-1)$. The Daubechies $L = 6$ wavelet (`db3`) has $m = 1$ and $M = 3$, so all coefficients with derivative orders up to one are integrals; a single second derivative is covered as well if the other orders are zero, by integration by parts.
+
+For higher orders, the solvers may still return a unique solution of the refinement relations and moment constraints without a warning, e.g., for `db3` with orders $(2, 2, 2)$. Such values extend the definition of the connection coefficients, but the corresponding integral does not exist in the classical sense, and their accuracy decreases with the derivative order. Check that this is what your application needs before using them.
 
 Each solver also has a `_low_mem` variant, e.g., `four_term_coeff_solver_low_mem`, which gives the same result with nested loops that follow the underlying equations closely, at the cost of computational speed.
 

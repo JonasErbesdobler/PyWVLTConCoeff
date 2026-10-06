@@ -26,6 +26,35 @@ def _axes_offset(ax: plt.Axes, font_size: float, em: float = 0.8) -> float:
     return -padding_inches / axes_height
 
 
+def _stacked_order_labels(ax: plt.Axes, deriv_orders: np.ndarray, font_size: float):
+    """Label each bar with its derivative orders, stacked in one row per order."""
+    line_height = 1.15 * font_size
+    ax.set_xticks(np.arange(deriv_orders.shape[0]))
+    ax.set_xticklabels([])
+    for row in range(deriv_orders.shape[1]):
+        # baseline of the row in points below the axis
+        offset = -(0.35 * font_size + (row + 0.8) * line_height)
+        ax.annotate(
+            rf"$i_{row + 1}$",
+            xy=(0, 0),
+            xycoords="axes fraction",
+            xytext=(-0.4 * font_size, offset),
+            textcoords="offset points",
+            ha="right",
+            va="baseline",
+        )
+        for i in range(deriv_orders.shape[0]):
+            ax.annotate(
+                str(deriv_orders[i, row]),
+                xy=(i, 0),
+                xycoords=("data", "axes fraction"),
+                xytext=(0, offset),
+                textcoords="offset points",
+                ha="center",
+                va="baseline",
+            )
+
+
 def create_custom_colormap():
     """Creates a custom colormap for plotting."""
     map_colors = [
@@ -231,7 +260,7 @@ def plot_two_term_residuals(
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
     ax.set_xlabel(r"$i$")
-    ax.set_ylabel(r"$|| H \cdot \Gamma^{(i)} - \frac{1}{2^i} \Gamma^{(i)} ||_{L_2}$")
+    ax.set_ylabel("Refinement residual")
     ax.grid(visible=True, which="major", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"two_term_{wvlt}_refinement_residuals.{format}"),
@@ -259,7 +288,7 @@ def plot_two_term_residuals(
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
     ax.set_xlabel(r"$i$")
-    ax.set_ylabel(r"$|| k^{\circ i} \cdot \Gamma^{(i)} - i! ||_{L_2}$")
+    ax.set_ylabel("Moments residual")
     ax.grid(visible=True, which="major", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"two_term_{wvlt}_momentum_residuals.{format}"),
@@ -349,10 +378,7 @@ def plot_three_term_residuals(
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
     ax.set_xlabel(r"$i_1$")
-    ax.set_ylabel(
-        r"$|| H \cdot \Omega^{(i_1),(i_2)} - \frac{1}{2^{i_1 + i_2 + 0.5}} \Omega^{(i_1),(i_2)} ||_{L_2}$",
-        loc="top",
-    )
+    ax.set_ylabel("Refinement residual")
     ax.set_xticks(np.arange(deriv_orders.shape[0]))
     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
     ax2 = ax.twiny()
@@ -388,9 +414,7 @@ def plot_three_term_residuals(
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
     ax.set_xlabel(r"$i_1$")
-    ax.set_ylabel(
-        r"$|| k^{\circ i} \cdot \Omega^{(i_1),(i_2)} - i! ||_{L_2}$", loc="center"
-    )
+    ax.set_ylabel("Moments residual")
     ax.set_xticks(range(deriv_orders.shape[0]))
     ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
     ax2 = ax.twiny()
@@ -475,9 +499,9 @@ def plot_four_term_residuals(
         res_mom.append(mom_res)
 
     # define constant offsets and sizes
-    plot_vert = 3.0
+    plot_vert = 2.6
     plot_horz = 15.0 if max_order is None else 6.0
-    bottom_pad = 2.1 * (font_size / 14)
+    bottom_pad = 0.75 * (font_size / 14)
     top_pad = 0.2
     left_pad = 1.1 * (font_size / 14)
     right_pad = 0.2
@@ -503,29 +527,8 @@ def plot_four_term_residuals(
     ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=10))
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
-    ax.set_xlabel(r"$i_1$")
-    ax.set_ylabel(
-        r"$|| H \cdot \Lambda^{(i_1),(i_2),(i_3)} - \frac{1}{2^{i_1 + i_2 + i_3 + 1}} \Lambda^{(i_1),(i_2),(i_3)} ||_{L_2}$",
-        loc="top",
-    )
-    ax.set_xticks(np.arange(deriv_orders.shape[0]))
-    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
-    ax2 = ax.twiny()
-    ax2.set_xlim(ax.get_xlim())
-    ax2.xaxis.set_ticks_position("bottom")
-    ax2.xaxis.set_label_position("bottom")
-    ax2.spines["bottom"].set_position(("axes", -0.25))
-    ax2.set_xlabel(r"$i_2$")
-    ax2.set_xticks(ax.get_xticks())
-    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
-    ax3 = ax.twiny()
-    ax3.set_xlim(ax.get_xlim())
-    ax3.xaxis.set_ticks_position("bottom")
-    ax3.xaxis.set_label_position("bottom")
-    ax3.spines["bottom"].set_position(("axes", -0.5))
-    ax3.set_xlabel(r"$i_3$")
-    ax3.set_xticks(ax.get_xticks())
-    ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+    ax.set_ylabel("Refinement residual")
+    _stacked_order_labels(ax, deriv_orders, font_size)
     ax.grid(visible=True, which="major", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"four_term_{wvlt}_refinement_residuals{suffix}.{format}"),
@@ -550,29 +553,8 @@ def plot_four_term_residuals(
     ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=10))
     ax.yaxis.set_major_formatter(ticker.LogFormatterMathtext())
     ax.yaxis.set_minor_locator(ticker.NullLocator())
-    ax.set_xlabel(r"$i_1$")
-    ax.set_ylabel(
-        r"$|| k^{\circ i} \cdot \Lambda^{(i_1),(i_2),(i_3)} - i! ||_{L_2}$",
-        loc="center",
-    )
-    ax.set_xticks(range(deriv_orders.shape[0]))
-    ax.set_xticklabels([str(i) for i in deriv_orders[:, 0]])
-    ax2 = ax.twiny()
-    ax2.set_xlim(ax.get_xlim())
-    ax2.xaxis.set_ticks_position("bottom")
-    ax2.xaxis.set_label_position("bottom")
-    ax2.spines["bottom"].set_position(("axes", -0.25))
-    ax2.set_xlabel(r"$i_2$")
-    ax2.set_xticks(ax.get_xticks())
-    ax2.set_xticklabels([str(i) for i in deriv_orders[:, 1]])
-    ax3 = ax.twiny()
-    ax3.set_xlim(ax.get_xlim())
-    ax3.xaxis.set_ticks_position("bottom")
-    ax3.xaxis.set_label_position("bottom")
-    ax3.spines["bottom"].set_position(("axes", -0.5))
-    ax3.set_xlabel(r"$i_3$")
-    ax3.set_xticks(ax.get_xticks())
-    ax3.set_xticklabels([str(i) for i in deriv_orders[:, 2]])
+    ax.set_ylabel("Moments residual")
+    _stacked_order_labels(ax, deriv_orders, font_size)
     ax.grid(visible=True, which="major", axis="y", linestyle="-")
     fig.savefig(
         os.path.join(path, f"four_term_{wvlt}_momentum_residuals{suffix}.{format}"),

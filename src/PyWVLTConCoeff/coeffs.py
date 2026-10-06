@@ -8,7 +8,7 @@ import warnings
 from typing import Tuple, Union
 
 # relative tolerance on the least squares residual above which the system is
-# considered inconsistent, i.e., the requested coefficients are not well defined
+# considered inconsistent, i.e., no coefficients fulfill all equations
 _RESIDUAL_TOL = 1e-8
 
 
@@ -78,9 +78,10 @@ def _solve_lstsq(lhs: np.ndarray, rhs: np.ndarray) -> np.ndarray:
     res_norm = np.linalg.norm(np.dot(lhs, coeff) - rhs)
     if res_norm > _RESIDUAL_TOL * max(1.0, np.linalg.norm(coeff)):
         warnings.warn(
-            f"Least squares residual is large ({res_norm:.1e}). The connection "
-            "coefficients are likely not well defined for this wavelet and "
-            "derivative order.",
+            f"Least squares residual is large ({res_norm:.1e}). The refinement "
+            "and moment equations are inconsistent for this wavelet and "
+            "derivative order, so the returned values are not connection "
+            "coefficients.",
             RuntimeWarning,
             stacklevel=3,
         )

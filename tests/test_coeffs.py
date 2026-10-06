@@ -19,22 +19,22 @@ WVLT = "db3"
 NUM = 9  # number of non-zero shifts per dimension, 2N - 3 with N = 6
 SHIFTS = range(-4, 5)
 
-# all well-defined derivative orders of the db3 scaling function
+# all derivative orders up to two, for which the db3 systems are consistent
 ORDERS_2 = list(itertools.product(range(3), repeat=2))
 ORDERS_3 = list(itertools.product(range(3), repeat=3))
 
-# tabulated values of the four-term (0),(1),(2) coefficient from the paper
-TABLE_012 = {
-    (-4, -4, -4): 2.14762e-07,
-    (-3, -1, -2): -0.055189259359,
-    (-2, -1, -1): -0.372490477325,
-    (-1, -1, -1): 0.988318459923,
-    (0, -1, 0): 2.732880531104,
-    (0, 0, 0): 0.738154153095,
-    (0, 1, 0): -3.352474089966,
-    (1, 2, 1): 1.087011725492,
-    (2, 3, 2): -0.265606047399,
-    (4, 4, 4): 0.000199239963,
+# tabulated values of the four-term (0),(1),(1) coefficient from the paper
+TABLE_011 = {
+    (-4, -4, -4): -3.0e-09,
+    (-3, -1, -2): -0.0018982632,
+    (-2, -1, -1): -0.0260262038,
+    (-1, -1, -1): 0.2055946136,
+    (0, -1, 0): -1.9145852962,
+    (0, 0, 0): 2.3010124780,
+    (0, 1, 0): -0.9221475291,
+    (1, 2, 1): 0.2209473009,
+    (2, 3, 2): -0.0308007421,
+    (4, 4, 4): -2.5501e-06,
 }
 
 
@@ -101,13 +101,13 @@ def test_low_mem_matches_vectorized():
 
 
 def test_four_term_matches_paper_table():
-    coeff = four_term_coeff_solver(WVLT, [0, 1, 2]).reshape(NUM, NUM, NUM)
-    for (k1, k2, k3), value in TABLE_012.items():
+    coeff = four_term_coeff_solver(WVLT, [0, 1, 1]).reshape(NUM, NUM, NUM)
+    for (k1, k2, k3), value in TABLE_011.items():
         assert coeff[k1 + 4, k2 + 4, k3 + 4] == pytest.approx(value, abs=1e-10)
 
 
 def test_four_term_shift_symmetry():
-    # exchanging the two non-differentiated scaling functions leaves the integral unchanged
+    # exchanging the two non-differentiated scaling functions leaves the coefficient unchanged
     coeff = four_term_coeff_solver(WVLT, [0, 1, 2]).reshape(NUM, NUM, NUM)
     for k1, k2, k3 in itertools.product(SHIFTS, repeat=3):
         m2, m3 = k2 - k1, k3 - k1
@@ -121,6 +121,9 @@ def test_four_term_permutation_symmetry():
     # equal derivative orders make the coefficient symmetric in its shifts
     coeff = four_term_coeff_solver(WVLT, [1, 1, 1]).reshape(NUM, NUM, NUM)
     np.testing.assert_allclose(coeff, coeff.transpose(1, 0, 2), atol=1e-10)
+    np.testing.assert_allclose(coeff, coeff.transpose(0, 2, 1), atol=1e-10)
+
+    coeff = four_term_coeff_solver(WVLT, [0, 1, 1]).reshape(NUM, NUM, NUM)
     np.testing.assert_allclose(coeff, coeff.transpose(0, 2, 1), atol=1e-10)
 
 
@@ -173,6 +176,6 @@ def test_invalid_deriv_orders(solver, orders):
         (three_term_coeff_solver, "db3", [3, 3]),
     ],
 )
-def test_warns_if_not_well_defined(solver, wvlt, orders):
+def test_warns_if_inconsistent(solver, wvlt, orders):
     with pytest.warns(RuntimeWarning):
         solver(wvlt, orders)
